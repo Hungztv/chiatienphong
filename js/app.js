@@ -1152,6 +1152,8 @@ async function initCloudSync() {
         updateSyncConnectedUI(res.roomCode);
       }
     }
+  } else if (settings.isHardcoded) {
+    updateSyncStatusPill('offline', 'Chọn mã phòng');
   }
 }
 

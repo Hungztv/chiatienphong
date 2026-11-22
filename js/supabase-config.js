@@ -1,7 +1,6 @@
-// Dán Project URL và Anon Public Key từ Supabase Dashboard -> Project Settings -> API
-// Sau khi dán và push lên GitHub, mọi máy truy cập link Vercel sẽ tự động kết nối được ngay.
+// Cấu hình Supabase đã được gắn cố định để mọi máy truy cập link Vercel tự động đồng bộ.
 
 export const SUPABASE_CONFIG = {
-  url: '',      // VD: 'https://abcdefghijklm.supabase.co'
-  anonKey: '',  // VD: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+  url: 'https://umwkmpgugystuehrtjgg.supabase.co',
+  anonKey: 'sb_publishable_163beManWxZH7JBpR--26Q_d46J2746',
 };
