@@ -215,6 +215,97 @@ html, body {
   gap: 8px;
 }
 
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+
+.sync-pill:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sync-pill.synced {
+  background: var(--primary-soft);
+  border-color: rgba(15, 118, 110, 0.35);
+  color: var(--primary);
+}
+
+.sync-pill.synced .sync-dot {
+  background: var(--accent);
+}
+
+.sync-pill.syncing .sync-dot {
+  background: var(--warning);
+}
+
+.sync-pill.error {
+  background: var(--danger-soft);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: var(--danger);
+}
+
+.sync-pill.error .sync-dot {
+  background: var(--danger);
+}
+
+.sync-box {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sync-connected-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.config-details {
+  font-size: 0.86rem;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.config-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.config-details summary:hover {
+  color: var(--primary);
+}
+
 /* Navigation */
 .app-nav {
   background: var(--surface);
@@ -1332,7 +1423,15 @@ input:focus, select:focus, textarea:focus {
   }
 
   .header-actions {
-    gap: 6px;
+    gap: 5px;
+  }
+
+  .sync-pill {
+    padding: 6px 9px;
+    font-size: 0.72rem;
+    max-width: 118px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .header-actions .btn-sm {

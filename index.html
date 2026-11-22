@@ -52,6 +52,10 @@
       </div>
 
       <div class="header-actions">
+        <button id="btnSyncStatus" class="sync-pill offline" title="Trạng thái đồng bộ đám mây Supabase">
+          <span class="sync-dot"></span>
+          <span id="syncStatusText">Lưu trên máy</span>
+        </button>
         <button id="btnCopyZalo" class="btn btn-primary btn-sm" title="Sao chép tổng kết để gửi Zalo/Messenger">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
           <span class="hide-sm">Copy Zalo</span>
@@ -450,21 +454,54 @@
         </div>
 
         <!-- Backup, Sync & Demo -->
-        <div class="card">
+        <div class="card" id="cloudSyncCard">
           <div class="card-header">
             <div>
-              <h2 class="card-title">Đồng bộ, Sao lưu & Dữ liệu</h2>
-              <p class="card-desc">Dữ liệu được lưu an toàn ngay trên trình duyệt của bạn</p>
+              <h2 class="card-title">☁️ Đồng bộ nhiều máy (Supabase)</h2>
+              <p class="card-desc">Cả 2 người cùng nhập mã phòng để xem & cập nhật chung theo thời gian thực</p>
             </div>
           </div>
 
           <div class="stack-md">
+            <div class="sync-box">
+              <div class="form-group">
+                <label for="syncRoomCode">Mã phòng dùng chung (viết liền, không dấu)</label>
+                <div class="input-with-btn">
+                  <input type="text" id="syncRoomCode" placeholder="VD: phong302-hung" autocomplete="off" />
+                  <button id="btnConnectRoom" class="btn btn-primary">Kết nối</button>
+                </div>
+              </div>
+
+              <div id="syncConnectedActions" class="sync-connected-bar hidden">
+                <span class="text-positive" style="font-weight:600; font-size:0.86rem;">✅ Đang đồng bộ tự động phòng <strong id="syncConnectedRoomLabel"></strong></span>
+                <div class="btn-row">
+                  <button id="btnCopyRoomInvite" class="btn btn-outline btn-sm">🔗 Copy link mời</button>
+                  <button id="btnDisconnectRoom" class="btn btn-ghost btn-sm text-negative">Ngắt</button>
+                </div>
+              </div>
+
+              <details id="supabaseConfigDetails" class="config-details">
+                <summary>⚙️ Cấu hình Supabase (URL & Anon Key)</summary>
+                <div class="stack-md mt-sm">
+                  <div class="form-group">
+                    <label for="supabaseUrlInput">Supabase Project URL</label>
+                    <input type="text" id="supabaseUrlInput" placeholder="https://xxxx.supabase.co" />
+                  </div>
+                  <div class="form-group">
+                    <label for="supabaseKeyInput">Supabase Anon Public Key</label>
+                    <input type="text" id="supabaseKeyInput" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." />
+                  </div>
+                  <button id="btnSaveSupabaseConfig" class="btn btn-outline btn-sm">💾 Lưu cấu hình Supabase</button>
+                </div>
+              </details>
+            </div>
+
             <div class="action-tile">
               <div>
-                <h4>🔗 Chia sẻ nhanh qua đường link</h4>
-                <p class="muted">Tạo đường link chứa toàn bộ dữ liệu phòng trọ để gửi qua Zalo cho bạn cùng phòng mở xem & lưu về máy.</p>
+                <h4>🔗 Chia sẻ nhanh qua đường link (không cần Supabase)</h4>
+                <p class="muted">Tạo đường link chứa dữ liệu hiện tại để gửi qua Zalo cho bạn cùng phòng mở xem.</p>
               </div>
-              <button id="btnShareLink2" class="btn btn-primary btn-sm">Tạo link</button>
+              <button id="btnShareLink2" class="btn btn-outline btn-sm">Tạo link</button>
             </div>
 
             <div class="action-tile">

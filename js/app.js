@@ -19,6 +19,16 @@ import {
   uid,
 } from './utils.js';
 import { renderCategoryDonut, renderMemberBarChart } from './charts.js';
+import {
+  connectRoom,
+  disconnectRoom,
+  getActiveRoomCode,
+  loadSyncSettings,
+  normalizeRoomCode,
+  saveSyncSettings,
+  schedulePushState,
+  setSyncCallbacks,
+} from './sync.js';
 
 const STORAGE_KEY = 'troshare_state_v2';
 const LEGACY_STORAGE_KEY = 'troshare_state_v1';
@@ -61,9 +71,12 @@ function loadState() {
   }
 }
 
-function saveState() {
+function saveState(skipCloudPush = false) {
   if (pendingSharedState) return; // Don't overwrite local data while previewing a shared link
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!skipCloudPush) {
+    schedulePushState(state);
+  }
 }
 
 function ensureMonth(monthKey) {
@@ -1017,6 +1030,129 @@ function bindEvents() {
     renderAll();
     showToast('Đã đặt lại toàn bộ dữ liệu.');
   });
+
+  // Cloud Sync (Supabase) UI events
+  document.getElementById('btnSyncStatus').addEventListener('click', () => {
+    switchTab('settings');
+    document.getElementById('cloudSyncCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  document.getElementById('btnSaveSupabaseConfig').addEventListener('click', () => {
+    const url = document.getElementById('supabaseUrlInput').value.trim();
+    const anonKey = document.getElementById('supabaseKeyInput').value.trim();
+    if (!url || !anonKey) {
+      showToast('Vui lòng nhập đầy đủ Supabase URL và Anon Key.');
+      return;
+    }
+    saveSyncSettings({ url, anonKey });
+    document.getElementById('supabaseConfigDetails').open = false;
+    showToast('✅ Đã lưu cấu hình Supabase! Giờ hãy nhập Mã phòng và bấm Kết nối.');
+  });
+
+  document.getElementById('btnConnectRoom').addEventListener('click', async () => {
+    const input = document.getElementById('syncRoomCode');
+    const code = normalizeRoomCode(input.value);
+    input.value = code;
+    if (!code || code.length < 3) {
+      showToast('Mã phòng cần ít nhất 3 ký tự (chữ không dấu hoặc số).');
+      return;
+    }
+
+    const res = await connectRoom(code, state);
+    if (!res.ok) {
+      if (res.reason === 'missing_config') {
+        document.getElementById('supabaseConfigDetails').open = true;
+        showToast('⚠️ Hãy điền Supabase URL & Anon Key trước khi kết nối.');
+      } else if (res.reason === 'db_error') {
+        showToast('❌ Lỗi Supabase: Hãy chắc chắn bạn đã chạy file supabase-setup.sql.');
+      } else {
+        showToast('❌ Không thể kết nối Supabase. Kiểm tra lại URL / Key và mạng.');
+      }
+      return;
+    }
+
+    updateSyncConnectedUI(res.roomCode);
+    if (res.loadedRemote) {
+      showToast(`☁️ Đã kết nối phòng "${res.roomCode}" và tải dữ liệu mới nhất!`);
+    } else {
+      showToast(`☁️ Đã tạo & đồng bộ phòng mới "${res.roomCode}" lên Supabase!`);
+    }
+  });
+
+  document.getElementById('btnDisconnectRoom').addEventListener('click', async () => {
+    await disconnectRoom();
+    updateSyncConnectedUI(null);
+    showToast('Đã ngắt đồng bộ đám mây (dữ liệu vẫn lưu trên máy này).');
+  });
+
+  document.getElementById('btnCopyRoomInvite').addEventListener('click', () => {
+    const code = getActiveRoomCode();
+    if (!code) return;
+    const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(code)}`;
+    copyText(url, `🔗 Đã copy link mời vào phòng "${code}"! Gửi cho bạn cùng phòng nhé.`);
+  });
+}
+
+function updateSyncStatusPill(status, label) {
+  const pill = document.getElementById('btnSyncStatus');
+  const text = document.getElementById('syncStatusText');
+  if (!pill || !text) return;
+  pill.className = `sync-pill ${status}`;
+  text.textContent = label;
+}
+
+function updateSyncConnectedUI(roomCode) {
+  const bar = document.getElementById('syncConnectedActions');
+  const label = document.getElementById('syncConnectedRoomLabel');
+  if (roomCode) {
+    bar?.classList.remove('hidden');
+    if (label) label.textContent = roomCode;
+    document.getElementById('syncRoomCode').value = roomCode;
+  } else {
+    bar?.classList.add('hidden');
+  }
+}
+
+async function initCloudSync() {
+  const settings = loadSyncSettings();
+  document.getElementById('supabaseUrlInput').value = settings.url || '';
+  document.getElementById('supabaseKeyInput').value = settings.anonKey || '';
+  if (settings.isHardcoded) {
+    document.getElementById('supabaseConfigDetails')?.classList.add('hidden');
+  } else if (!settings.url || !settings.anonKey) {
+    document.getElementById('supabaseConfigDetails').open = true;
+  }
+
+  setSyncCallbacks({
+    onStatusChange: (status, label) => updateSyncStatusPill(status, label),
+    onRemoteData: (remoteData, { initial }) => {
+      state = {
+        roomName: remoteData.roomName || 'Phòng trọ của chúng mình',
+        members: remoteData.members,
+        months: remoteData.months || {},
+      };
+      pendingSharedState = null;
+      saveState(true);
+      renderAll();
+      if (!initial) {
+        showToast('☁️ Đã cập nhật dữ liệu mới từ bạn cùng phòng!');
+      }
+    },
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  const urlRoom = normalizeRoomCode(params.get('room') || '');
+  const targetRoom = urlRoom || settings.roomCode;
+
+  if (targetRoom) {
+    document.getElementById('syncRoomCode').value = targetRoom;
+    if (settings.url && settings.anonKey) {
+      const res = await connectRoom(targetRoom, state);
+      if (res.ok) {
+        updateSyncConnectedUI(res.roomCode);
+      }
+    }
+  }
 }
 
 // Init
@@ -1025,3 +1161,4 @@ checkSharedUrl();
 bindEvents();
 document.getElementById('expenseDate').value = getDefaultDateForMonth(currentMonth);
 renderAll();
+initCloudSync();
