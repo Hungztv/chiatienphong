@@ -131,6 +131,18 @@
         </div>
       </div>
 
+      <!-- Recent Expenses Preview -->
+      <div class="card" id="recentExpensesCard">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Chi tiêu gần đây</h2>
+            <p class="card-desc">Các khoản vừa thêm trong tháng</p>
+          </div>
+          <button id="btnViewAllExpenses" class="btn btn-ghost btn-sm text-primary">Xem tất cả →</button>
+        </div>
+        <div id="recentExpenseList" class="expense-list"></div>
+      </div>
+
       <!-- Charts -->
       <div class="grid-2-col">
         <div class="card">
@@ -164,51 +176,50 @@
           </div>
           <form id="expenseForm" class="stack-md">
             <input type="hidden" id="expenseId" />
+            <input type="hidden" id="expenseCategory" value="food" />
+            <input type="hidden" id="expensePayer" value="" />
+
+            <div class="amount-hero-box">
+              <label for="expenseAmount">Số tiền chi (VNĐ)</label>
+              <div class="amount-input-wrap">
+                <input type="text" inputmode="numeric" id="expenseAmount" class="amount-hero-input mono" placeholder="0" required />
+                <span class="amount-currency mono">₫</span>
+              </div>
+              <div class="quick-chips">
+                <button type="button" class="chip" data-add-amount="10000">+10k</button>
+                <button type="button" class="chip" data-add-amount="20000">+20k</button>
+                <button type="button" class="chip" data-add-amount="50000">+50k</button>
+                <button type="button" class="chip" data-add-amount="100000">+100k</button>
+                <button type="button" class="chip chip-accent" data-mul-1000="true">×1.000</button>
+              </div>
+            </div>
 
             <div class="form-group">
-              <label for="expenseTitle">Tên khoản chi *</label>
-              <input type="text" id="expenseTitle" placeholder="VD: Đi chợ, ăn tối, mua nước giặt..." required />
+              <label for="expenseTitle">Chi cho việc gì? *</label>
+              <input type="text" id="expenseTitle" placeholder="VD: Đi chợ mua thịt rau, ăn tối, nước giặt..." required />
+            </div>
+
+            <div class="form-group">
+              <label>Ai là người trả tiền?</label>
+              <div id="payerPillGroup" class="payer-pill-group"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Chọn danh mục</label>
+              <div id="categoryPillGrid" class="category-pill-grid"></div>
             </div>
 
             <div class="form-row-2">
-              <div class="form-group">
-                <label for="expenseAmount">Số tiền (VNĐ) *</label>
-                <input type="text" inputmode="numeric" id="expenseAmount" placeholder="150.000" required />
-                <div class="quick-chips">
-                  <button type="button" class="chip" data-add-amount="20000">+20k</button>
-                  <button type="button" class="chip" data-add-amount="50000">+50k</button>
-                  <button type="button" class="chip" data-add-amount="100000">+100k</button>
-                  <button type="button" class="chip" data-mul-1000="true">×1.000</button>
-                </div>
-              </div>
               <div class="form-group">
                 <label for="expenseDate">Ngày chi</label>
                 <input type="date" id="expenseDate" required />
               </div>
-            </div>
-
-            <div class="form-row-2">
               <div class="form-group">
-                <label for="expenseCategory">Danh mục</label>
-                <select id="expenseCategory">
-                  <option value="food">🛒 Ăn uống / Đi chợ</option>
-                  <option value="household">🧴 Đồ dùng phòng</option>
-                  <option value="utilities">💡 Sinh hoạt chung</option>
-                  <option value="fun">🎉 Ăn chơi / Tụ tập</option>
-                  <option value="other">📦 Khác</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="expensePayer">Ai trả tiền?</label>
-                <select id="expensePayer" required></select>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Cách chia tiền</label>
-              <div class="segmented-control" id="splitTypeControl">
-                <button type="button" class="seg-btn active" data-split="equal">Chia đều</button>
-                <button type="button" class="seg-btn" data-split="custom">Chia tùy chỉnh</button>
+                <label>Cách chia tiền</label>
+                <div class="segmented-control" id="splitTypeControl">
+                  <button type="button" class="seg-btn active" data-split="equal">Chia đều</button>
+                  <button type="button" class="seg-btn" data-split="custom">Tùy chỉnh</button>
+                </div>
               </div>
             </div>
 

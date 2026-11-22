@@ -1,10 +1,16 @@
 export const CATEGORIES = {
-  food: { label: 'Ăn uống / Đi chợ', icon: '🛒', color: '#10b981' },
-  household: { label: 'Đồ dùng phòng', icon: '🧴', color: '#f59e0b' },
-  utilities: { label: 'Sinh hoạt chung', icon: '💡', color: '#0284c7' },
-  fun: { label: 'Ăn chơi / Tụ tập', icon: '🎉', color: '#ec4899' },
-  other: { label: 'Khác', icon: '📦', color: '#64748b' },
+  food: { label: 'Ăn uống / Đi chợ', short: 'Ăn uống', icon: '🛒', color: '#10b981', bg: 'rgba(16, 185, 129, 0.13)' },
+  household: { label: 'Đồ dùng phòng', short: 'Đồ dùng', icon: '🧴', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.14)' },
+  utilities: { label: 'Sinh hoạt chung', short: 'Sinh hoạt', icon: '💡', color: '#0284c7', bg: 'rgba(2, 132, 199, 0.13)' },
+  fun: { label: 'Ăn chơi / Tụ tập', short: 'Ăn chơi', icon: '🎉', color: '#ec4899', bg: 'rgba(236, 72, 153, 0.13)' },
+  other: { label: 'Khác', short: 'Khác', icon: '📦', color: '#64748b', bg: 'rgba(100, 116, 139, 0.14)' },
 };
+
+export function formatShortDate(isoDate) {
+  if (!isoDate || !isoDate.includes('-')) return isoDate || '';
+  const [, m, d] = isoDate.split('-');
+  return `${d}/${m}`;
+}
 
 export const AVATAR_COLORS = [
   '#0f766e', '#2563eb', '#d97706', '#db2777', '#7c3aed', '#059669', '#dc2626', '#0891b2'

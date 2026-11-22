@@ -6,6 +6,7 @@ import {
   escapeHtml,
   formatMonthLabel,
   formatNumberInput,
+  formatShortDate,
   formatVND,
   getInitials,
   getMonthKey,
@@ -116,6 +117,7 @@ function renderAll() {
 
   renderOverview();
   renderMemberSelects();
+  renderCategoryPills();
   renderSplitParticipants();
   renderExpenseList();
   renderMembersSettings();
@@ -212,31 +214,99 @@ function renderOverview() {
     })
     .join('');
 
+  // Recent expenses preview (top 3)
+  renderRecentExpenses();
+
   // Charts
   renderCategoryDonut(document.getElementById('categoryChartContainer'), fin.categoryTotals, fin.grandTotal);
   renderMemberBarChart(document.getElementById('memberBarChartContainer'), fin.memberStats);
 }
 
+function renderRecentExpenses() {
+  const monthData = ensureMonth(currentMonth);
+  const recent = [...(monthData.expenses || [])]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 3);
+
+  const listEl = document.getElementById('recentExpenseList');
+  if (!listEl) return;
+
+  if (recent.length === 0) {
+    listEl.innerHTML = `<div class="empty-state compact">Chưa có khoản chi nào. Bấm <strong>+ Thêm chi</strong> ở trên để bắt đầu nhé!</div>`;
+    return;
+  }
+
+  listEl.innerHTML = recent
+    .map((e) => {
+      const cat = CATEGORIES[e.category] || CATEGORIES.other;
+      const payer = state.members.find((m) => m.id === e.payerId);
+      return `
+        <div class="expense-item compact">
+          <div class="expense-left">
+            <div class="expense-cat-badge" style="background:${cat.bg}; border-color:transparent;">${cat.icon}</div>
+            <div>
+              <div class="expense-title">${escapeHtml(e.title)}</div>
+              <div class="expense-meta">
+                <span>${formatShortDate(e.date)}</span> ·
+                <span class="payer-inline"><span class="payer-dot" style="background:${payer?.color || '#64748b'}"></span>${escapeHtml(payer?.name || '?')} trả</span>
+              </div>
+            </div>
+          </div>
+          <div class="expense-amount mono">${formatVND(e.amount)}</div>
+        </div>
+      `;
+    })
+    .join('');
+}
+
 function renderMemberSelects() {
-  const payerSelect = document.getElementById('expensePayer');
+  const payerInput = document.getElementById('expensePayer');
   const filterPayer = document.getElementById('filterPayer');
+  const payerGroup = document.getElementById('payerPillGroup');
 
-  const prevExpensePayer = payerSelect.value;
+  const prevPayer = payerInput.value;
+  const activePayer = state.members.some((m) => m.id === prevPayer) ? prevPayer : state.members[0]?.id || '';
+  payerInput.value = activePayer;
+
+  if (payerGroup) {
+    payerGroup.innerHTML = state.members
+      .map(
+        (m) => `
+      <button type="button" class="payer-pill ${m.id === activePayer ? 'active' : ''}" data-select-payer="${m.id}">
+        <span class="avatar avatar-sm" style="background:${m.color}">${escapeHtml(getInitials(m.name))}</span>
+        <span>${escapeHtml(m.name)}</span>
+      </button>
+    `
+      )
+      .join('');
+  }
+
   const prevFilterPayer = filterPayer.value;
-
   const memberOpts = state.members
     .map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`)
     .join('');
-
-  payerSelect.innerHTML = memberOpts;
-  if (state.members.some((m) => m.id === prevExpensePayer)) {
-    payerSelect.value = prevExpensePayer;
-  }
-
   filterPayer.innerHTML = `<option value="all">Tất cả người trả</option>${memberOpts}`;
   if (prevFilterPayer === 'all' || state.members.some((m) => m.id === prevFilterPayer)) {
     filterPayer.value = prevFilterPayer;
   }
+}
+
+function renderCategoryPills() {
+  const grid = document.getElementById('categoryPillGrid');
+  const catInput = document.getElementById('expenseCategory');
+  if (!grid || !catInput) return;
+  const activeCat = catInput.value || 'food';
+
+  grid.innerHTML = Object.entries(CATEGORIES)
+    .map(
+      ([key, meta]) => `
+    <button type="button" class="cat-pill ${key === activeCat ? 'active' : ''}" data-select-category="${key}" style="--cat-color:${meta.color}; --cat-bg:${meta.bg}">
+      <span class="cat-pill-icon">${meta.icon}</span>
+      <span class="cat-pill-label">${escapeHtml(meta.short)}</span>
+    </button>
+  `
+    )
+    .join('');
 }
 
 function renderSplitParticipants(existingExpense = null) {
@@ -365,12 +435,12 @@ function renderExpenseList() {
       return `
         <div class="expense-item">
           <div class="expense-left">
-            <div class="expense-cat-badge" title="${escapeHtml(cat.label)}">${cat.icon}</div>
+            <div class="expense-cat-badge" style="background:${cat.bg}; border-color:transparent;" title="${escapeHtml(cat.label)}">${cat.icon}</div>
             <div>
               <div class="expense-title">${escapeHtml(e.title)}</div>
               <div class="expense-meta">
-                <span>${e.date}</span> ·
-                <span><strong>${escapeHtml(payer?.name || '?')}</strong> trả</span> ·
+                <span>${formatShortDate(e.date)}</span> ·
+                <span class="payer-inline"><span class="payer-dot" style="background:${payer?.color || '#64748b'}"></span><strong>${escapeHtml(payer?.name || '?')}</strong> trả</span> ·
                 <span>${splitLabel}</span>
               </div>
               ${e.note ? `<div class="expense-note">"${escapeHtml(e.note)}"</div>` : ''}
@@ -412,6 +482,7 @@ function renderMembersSettings() {
 function resetExpenseForm() {
   document.getElementById('expenseForm').reset();
   document.getElementById('expenseId').value = '';
+  document.getElementById('expenseCategory').value = 'food';
   document.getElementById('expenseFormTitle').textContent = 'Thêm khoản chi mới';
   document.getElementById('btnSubmitExpense').textContent = '+ Lưu khoản chi';
   document.getElementById('btnCancelEditExpense').classList.add('hidden');
@@ -420,6 +491,8 @@ function resetExpenseForm() {
   document.querySelectorAll('#splitTypeControl .seg-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.split === 'equal');
   });
+  renderMemberSelects();
+  renderCategoryPills();
   renderSplitParticipants();
 }
 
@@ -466,7 +539,26 @@ function bindEvents() {
 
   document.getElementById('btnQuickAddFromOverview').addEventListener('click', () => {
     switchTab('expenses');
-    setTimeout(() => document.getElementById('expenseTitle').focus(), 120);
+    setTimeout(() => document.getElementById('expenseAmount').focus(), 120);
+  });
+
+  document.getElementById('btnViewAllExpenses')?.addEventListener('click', () => {
+    switchTab('expenses');
+  });
+
+  // Visual Payer & Category pill selectors
+  document.getElementById('payerPillGroup').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-select-payer]');
+    if (!btn) return;
+    document.getElementById('expensePayer').value = btn.dataset.selectPayer;
+    renderMemberSelects();
+  });
+
+  document.getElementById('categoryPillGrid').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-select-category]');
+    if (!btn) return;
+    document.getElementById('expenseCategory').value = btn.dataset.selectCategory;
+    renderCategoryPills();
   });
 
   // Month navigation
@@ -648,6 +740,8 @@ function bindEvents() {
       document.querySelectorAll('#splitTypeControl .seg-btn').forEach((b) => {
         b.classList.toggle('active', b.dataset.split === currentSplitType);
       });
+      renderMemberSelects();
+      renderCategoryPills();
       renderSplitParticipants(exp);
       document.getElementById('expenseFormTitle').textContent = 'Chỉnh sửa khoản chi';
       document.getElementById('btnSubmitExpense').textContent = '💾 Cập nhật khoản chi';
