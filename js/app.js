@@ -20,8 +20,14 @@ import {
 } from './utils.js';
 import { renderCategoryDonut, renderMemberBarChart } from './charts.js';
 
-const STORAGE_KEY = 'troshare_state_v1';
+const STORAGE_KEY = 'troshare_state_v2';
+const LEGACY_STORAGE_KEY = 'troshare_state_v1';
 const THEME_KEY = 'troshare_theme_v1';
+
+// Clear legacy v1 data so the app starts cleanly at 0
+try {
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+} catch {}
 
 let state = loadState();
 let currentMonth = getMonthKey(new Date());
@@ -544,6 +550,9 @@ function switchTab(tabName) {
   document.querySelectorAll('.tab-panel').forEach((panel) => {
     panel.classList.toggle('active', panel.id === `tab-${tabName}`);
   });
+  if (window.innerWidth <= 768) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 }
 
 async function copyText(text, successMsg) {
