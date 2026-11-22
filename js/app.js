@@ -2,12 +2,7 @@ import {
   AVATAR_COLORS,
   CATEGORIES,
   buildZaloSummary,
-  computeFixedBill,
   computeMonthFinancials,
-  createDemoState,
-  decodeStateFromHash,
-  defaultFixedBill,
-  encodeStateToHash,
   escapeHtml,
   formatMonthLabel,
   formatNumberInput,
@@ -19,37 +14,27 @@ import {
   uid,
 } from './utils.js';
 import { renderCategoryDonut, renderMemberBarChart } from './charts.js';
-import {
-  connectRoom,
-  disconnectRoom,
-  getActiveRoomCode,
-  loadSyncSettings,
-  normalizeRoomCode,
-  saveSyncSettings,
-  schedulePushState,
-  setSyncCallbacks,
-} from './sync.js';
+import { schedulePushState, setSyncCallbacks, startAutoSync } from './sync.js';
 
-const STORAGE_KEY = 'troshare_state_v2';
-const LEGACY_STORAGE_KEY = 'troshare_state_v1';
+const STORAGE_KEY = 'troshare_state_v3';
 const THEME_KEY = 'troshare_theme_v1';
 
-// Clear legacy v1 data so the app starts cleanly at 0
+// Clean up older keys
 try {
-  localStorage.removeItem(LEGACY_STORAGE_KEY);
+  localStorage.removeItem('troshare_state_v1');
+  localStorage.removeItem('troshare_state_v2');
+  localStorage.removeItem('troshare_sync_settings_v1');
 } catch {}
 
 let state = loadState();
 let currentMonth = getMonthKey(new Date());
 let currentSplitType = 'equal';
-let currentWaterMode = 'per_person';
-let pendingSharedState = null;
 
 function createDefaultState() {
   return {
-    roomName: 'Phòng trọ của chúng mình',
+    roomName: 'Chi tiêu chung phòng trọ',
     members: [
-      { id: 'm_1', name: 'Bạn A (Tôi)', color: '#0f766e' },
+      { id: 'm_1', name: 'Bạn A', color: '#0f766e' },
       { id: 'm_2', name: 'Bạn B', color: '#2563eb' },
     ],
     months: {},
@@ -72,7 +57,6 @@ function loadState() {
 }
 
 function saveState(skipCloudPush = false) {
-  if (pendingSharedState) return; // Don't overwrite local data while previewing a shared link
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (!skipCloudPush) {
     schedulePushState(state);
@@ -82,7 +66,6 @@ function saveState(skipCloudPush = false) {
 function ensureMonth(monthKey) {
   if (!state.months[monthKey]) {
     state.months[monthKey] = {
-      fixed: defaultFixedBill(state.members.length),
       expenses: [],
       settlements: [],
     };
@@ -98,15 +81,14 @@ function showToast(message) {
   el.textContent = message;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
 // Theme
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const theme = saved || (prefersDark ? 'dark' : 'light');
-  applyTheme(theme);
+  applyTheme(saved || (prefersDark ? 'dark' : 'light'));
 }
 
 function applyTheme(theme) {
@@ -116,33 +98,19 @@ function applyTheme(theme) {
   document.getElementById('iconMoon')?.classList.toggle('hidden', theme === 'dark');
 }
 
-// Check URL hash for shared state
-function checkSharedUrl() {
-  const hash = window.location.hash || '';
-  if (!hash.startsWith('#share=')) return;
-  const encoded = hash.slice('#share='.length);
-  if (!encoded) return;
-  try {
-    const decoded = decodeStateFromHash(encoded);
-    if (decoded && Array.isArray(decoded.members) && decoded.members.length > 0) {
-      pendingSharedState = state; // keep original local state as backup
-      state = decoded;
-      const availableMonths = Object.keys(state.months || {}).sort();
-      if (availableMonths.length > 0 && !state.months[currentMonth]) {
-        currentMonth = availableMonths[availableMonths.length - 1];
-      }
-      document.getElementById('sharedBanner')?.classList.remove('hidden');
-    }
-  } catch {
-    showToast('Đường link chia sẻ không hợp lệ.');
-  }
+function updateSyncStatusPill(status, label) {
+  const pill = document.getElementById('syncStatusPill');
+  const text = document.getElementById('syncStatusText');
+  if (!pill || !text) return;
+  pill.className = `sync-pill ${status}`;
+  text.textContent = label;
 }
 
-// Render everything
+// Render all
 function renderAll() {
   ensureMonth(currentMonth);
 
-  document.getElementById('roomNameDisplay').textContent = state.roomName || 'Phòng trọ của chúng mình';
+  document.getElementById('roomNameDisplay').textContent = state.roomName || 'Chi tiêu chung phòng trọ';
   document.getElementById('roomNameInput').value = state.roomName || '';
   document.getElementById('currentMonthLabel').textContent = formatMonthLabel(currentMonth);
 
@@ -150,7 +118,6 @@ function renderAll() {
   renderMemberSelects();
   renderSplitParticipants();
   renderExpenseList();
-  populateFixedForm();
   renderMembersSettings();
 }
 
@@ -158,22 +125,15 @@ function renderOverview() {
   const fin = computeMonthFinancials(state, currentMonth);
 
   document.getElementById('kpiTotal').textContent = formatVND(fin.grandTotal);
-  document.getElementById('kpiFixed').textContent = formatVND(fin.fixedCalc.total);
-  document.getElementById('kpiFixedSub').textContent =
-    fin.fixedCalc.total > 0
-      ? `Mỗi người ~${formatVND(fin.fixedCalc.perPerson)}`
-      : 'Chưa nhập hóa đơn tháng này';
-  document.getElementById('kpiShared').textContent = formatVND(fin.sharedTotal);
-  document.getElementById('kpiSharedSub').textContent = `${fin.expensesCount} khoản chi`;
   document.getElementById('kpiPerPerson').textContent = formatVND(fin.perPersonAvg);
-  document.getElementById('kpiPerPersonSub').textContent = `${state.members.length} thành viên`;
+  document.getElementById('kpiCount').textContent = `${fin.expensesCount} khoản`;
 
   // Settlement Transfers
   const settlementList = document.getElementById('settlementList');
   if (fin.transfers.length === 0) {
     settlementList.innerHTML = `
       <div class="settlement-empty">
-        🎉 Tuyệt vời! Tháng ${currentMonth.split('-')[1]} hiện không có ai nợ ai.
+        🎉 Hiện tại hai bạn đã cân bằng, không ai nợ ai!
       </div>
     `;
   } else {
@@ -188,7 +148,7 @@ function renderOverview() {
           <span class="avatar avatar-sm" style="background:${t.to.color}">${escapeHtml(getInitials(t.to.name))}</span>
           <strong>${escapeHtml(t.to.name)}</strong>
         </div>
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div class="settlement-right">
           <span class="settlement-amount mono">${formatVND(t.amount)}</span>
           <button class="btn btn-outline btn-sm" data-settle-from="${t.from.id}" data-settle-to="${t.to.id}" data-settle-amount="${t.amount}">
             ✓ Đã trả
@@ -212,7 +172,7 @@ function renderOverview() {
         return `
           <div class="history-item">
             <span>✅ <strong>${escapeHtml(from)}</strong> đã trả <strong>${escapeHtml(to)}</strong> <span class="mono">${formatVND(s.amount)}</span> <span class="muted">(${s.date})</span></span>
-            <button class="btn btn-ghost btn-sm" data-undo-settlement="${s.id}" title="Hoàn tác">Hoàn tác</button>
+            <button class="btn btn-ghost btn-sm" data-undo-settlement="${s.id}">Hoàn tác</button>
           </div>
         `;
       })
@@ -260,7 +220,6 @@ function renderOverview() {
 function renderMemberSelects() {
   const payerSelect = document.getElementById('expensePayer');
   const filterPayer = document.getElementById('filterPayer');
-  const fixedPayer = document.getElementById('fixedPayer');
 
   const prevExpensePayer = payerSelect.value;
   const prevFilterPayer = filterPayer.value;
@@ -278,11 +237,6 @@ function renderMemberSelects() {
   if (prevFilterPayer === 'all' || state.members.some((m) => m.id === prevFilterPayer)) {
     filterPayer.value = prevFilterPayer;
   }
-
-  fixedPayer.innerHTML = `
-    <option value="split_self">Mỗi người tự đóng phần mình</option>
-    ${state.members.map((m) => `<option value="${m.id}">${escapeHtml(m.name)} ứng trước toàn bộ</option>`).join('')}
-  `;
 }
 
 function renderSplitParticipants(existingExpense = null) {
@@ -307,7 +261,7 @@ function renderSplitParticipants(existingExpense = null) {
         `;
         })
         .join('') +
-      `<div class="split-status"><span>Chia đều cho người được chọn</span><span id="splitEqualInfo" class="mono"></span></div>`;
+      `<div class="split-status"><span>Chia đều</span><span id="splitEqualInfo" class="mono"></span></div>`;
     updateEqualSplitPreview();
   } else {
     const customSplits = existingExpense?.customSplits || {};
@@ -395,7 +349,7 @@ function renderExpenseList() {
   const listEl = document.getElementById('expenseList');
 
   if (filtered.length === 0) {
-    listEl.innerHTML = `<div class="empty-state">Chưa có khoản chi chung nào trong ${formatMonthLabel(currentMonth)}.<br/>Hãy thêm khoản đầu tiên ở form bên cạnh!</div>`;
+    listEl.innerHTML = `<div class="empty-state">Chưa có khoản chi nào trong ${formatMonthLabel(currentMonth)}.<br/>Thêm khoản đầu tiên ở trên nhé!</div>`;
     return;
   }
 
@@ -435,84 +389,6 @@ function renderExpenseList() {
     .join('');
 }
 
-// Fixed Bills Form
-function populateFixedForm() {
-  const monthData = ensureMonth(currentMonth);
-  const f = monthData.fixed || defaultFixedBill(state.members.length);
-
-  document.getElementById('fixedIncludeInSettlement').checked = f.includeInSettlement !== false;
-  document.getElementById('fixedPayer').value =
-    f.payerId && (f.payerId === 'split_self' || state.members.some((m) => m.id === f.payerId))
-      ? f.payerId
-      : 'split_self';
-
-  document.getElementById('fixedRent').value = f.rent ? formatNumberInput(f.rent) : '';
-  document.getElementById('elecOld').value = f.elecOld ?? '';
-  document.getElementById('elecNew').value = f.elecNew ?? '';
-  document.getElementById('elecRate').value = f.elecRate ? formatNumberInput(f.elecRate) : '';
-
-  currentWaterMode = f.waterMode === 'meter' ? 'meter' : 'per_person';
-  updateWaterModeUI();
-
-  document.getElementById('waterPerPersonRate').value = f.waterPerPersonRate ? formatNumberInput(f.waterPerPersonRate) : '';
-  document.getElementById('waterPersonCount').value = f.waterPersonCount || state.members.length;
-  document.getElementById('waterOld').value = f.waterOld ?? '';
-  document.getElementById('waterNew').value = f.waterNew ?? '';
-  document.getElementById('waterMeterRate').value = f.waterMeterRate ? formatNumberInput(f.waterMeterRate) : '';
-
-  document.getElementById('fixedWifi').value = f.wifi ? formatNumberInput(f.wifi) : '';
-  document.getElementById('fixedTrash').value = f.trash ? formatNumberInput(f.trash) : '';
-  document.getElementById('fixedParking').value = f.parking ? formatNumberInput(f.parking) : '';
-  document.getElementById('fixedOtherNote').value = f.note || '';
-
-  updateFixedLivePreview();
-}
-
-function readFixedForm() {
-  return {
-    includeInSettlement: document.getElementById('fixedIncludeInSettlement').checked,
-    payerId: document.getElementById('fixedPayer').value,
-    rent: parseVND(document.getElementById('fixedRent').value),
-    elecOld: document.getElementById('elecOld').value,
-    elecNew: document.getElementById('elecNew').value,
-    elecRate: parseVND(document.getElementById('elecRate').value),
-    waterMode: currentWaterMode,
-    waterPerPersonRate: parseVND(document.getElementById('waterPerPersonRate').value),
-    waterPersonCount: Math.max(1, Number(document.getElementById('waterPersonCount').value) || state.members.length),
-    waterOld: document.getElementById('waterOld').value,
-    waterNew: document.getElementById('waterNew').value,
-    waterMeterRate: parseVND(document.getElementById('waterMeterRate').value),
-    wifi: parseVND(document.getElementById('fixedWifi').value),
-    trash: parseVND(document.getElementById('fixedTrash').value),
-    parking: parseVND(document.getElementById('fixedParking').value),
-    note: document.getElementById('fixedOtherNote').value.trim(),
-  };
-}
-
-function updateWaterModeUI() {
-  document.querySelectorAll('#waterModeControl .seg-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.waterMode === currentWaterMode);
-  });
-  document.getElementById('waterPerPersonFields').classList.toggle('hidden', currentWaterMode !== 'per_person');
-  document.getElementById('waterMeterFields').classList.toggle('hidden', currentWaterMode !== 'meter');
-}
-
-function updateFixedLivePreview() {
-  const data = readFixedForm();
-  const calc = computeFixedBill(data, state.members.length);
-
-  document.getElementById('elecComputed').textContent = `${calc.elecUsage} kWh = ${formatVND(calc.elecTotal)}`;
-  document.getElementById('waterComputed').textContent =
-    currentWaterMode === 'meter'
-      ? `${calc.waterUsage} m³ = ${formatVND(calc.waterTotal)}`
-      : formatVND(calc.waterTotal);
-
-  document.getElementById('fixedTotalDisplay').textContent = formatVND(calc.total);
-  document.getElementById('fixedMemberCountDisplay').textContent = String(state.members.length);
-  document.getElementById('fixedPerPersonDisplay').textContent = formatVND(calc.perPerson);
-}
-
-// Members Settings
 function renderMembersSettings() {
   const list = document.getElementById('membersList');
   list.innerHTML = state.members
@@ -533,11 +409,10 @@ function renderMembersSettings() {
     .join('');
 }
 
-// Reset expense form
 function resetExpenseForm() {
   document.getElementById('expenseForm').reset();
   document.getElementById('expenseId').value = '';
-  document.getElementById('expenseFormTitle').textContent = 'Thêm khoản chi chung';
+  document.getElementById('expenseFormTitle').textContent = 'Thêm khoản chi mới';
   document.getElementById('btnSubmitExpense').textContent = '+ Lưu khoản chi';
   document.getElementById('btnCancelEditExpense').classList.add('hidden');
   document.getElementById('expenseDate').value = getDefaultDateForMonth(currentMonth);
@@ -583,17 +458,6 @@ async function copyText(text, successMsg) {
   }
 }
 
-function handleShareLink() {
-  try {
-    const encoded = encodeStateToHash(state);
-    const url = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
-    copyText(url, '🔗 Đã sao chép đường link chia sẻ! Gửi cho bạn cùng phòng nhé.');
-  } catch {
-    showToast('Không thể tạo link chia sẻ.');
-  }
-}
-
-// Wire all events
 function bindEvents() {
   // Tabs
   document.querySelectorAll('.nav-tab').forEach((btn) => {
@@ -602,7 +466,7 @@ function bindEvents() {
 
   document.getElementById('btnQuickAddFromOverview').addEventListener('click', () => {
     switchTab('expenses');
-    document.getElementById('expenseTitle').focus();
+    setTimeout(() => document.getElementById('expenseTitle').focus(), 120);
   });
 
   // Month navigation
@@ -623,36 +487,15 @@ function bindEvents() {
     applyTheme(cur === 'dark' ? 'light' : 'dark');
   });
 
-  // Shared banner actions
-  document.getElementById('btnAcceptShare').addEventListener('click', () => {
-    pendingSharedState = null;
-    saveState();
-    history.replaceState(null, '', window.location.pathname);
-    document.getElementById('sharedBanner').classList.add('hidden');
-    showToast('✅ Đã lưu dữ liệu chia sẻ vào máy của bạn!');
-  });
-
-  document.getElementById('btnDismissShare').addEventListener('click', () => {
-    if (pendingSharedState) {
-      state = pendingSharedState;
-      pendingSharedState = null;
-    }
-    history.replaceState(null, '', window.location.pathname);
-    document.getElementById('sharedBanner').classList.add('hidden');
-    renderAll();
-    showToast('Đã quay lại dữ liệu trước đó của bạn.');
-  });
-
   // Zalo Summary Modal
   document.getElementById('btnCopyZalo').addEventListener('click', () => {
-    const text = buildZaloSummary(state, currentMonth);
-    document.getElementById('zaloSummaryText').value = text;
+    document.getElementById('zaloSummaryText').value = buildZaloSummary(state, currentMonth);
     document.getElementById('zaloModal').classList.remove('hidden');
   });
 
   document.getElementById('btnConfirmCopyZalo').addEventListener('click', () => {
     const text = document.getElementById('zaloSummaryText').value;
-    copyText(text, '📋 Đã copy tổng kết! Dán vào Zalo/Messenger ngay nhé.');
+    copyText(text, '📋 Đã copy tổng kết! Dán vào Zalo ngay nhé.');
     document.getElementById('zaloModal').classList.add('hidden');
   });
 
@@ -662,47 +505,25 @@ function bindEvents() {
     });
   });
 
-  // Share Link
-  document.getElementById('btnShareLink').addEventListener('click', handleShareLink);
-  document.getElementById('btnShareLink2').addEventListener('click', handleShareLink);
-
-  // Format currency inputs smoothly
-  const currencyInputIds = [
-    'expenseAmount',
-    'fixedRent',
-    'elecRate',
-    'waterPerPersonRate',
-    'waterMeterRate',
-    'fixedWifi',
-    'fixedTrash',
-    'fixedParking',
-  ];
-  currencyInputIds.forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', () => {
-      el.value = formatNumberInput(el.value);
-      if (id === 'expenseAmount') {
-        updateEqualSplitPreview();
-        updateCustomSplitStatus();
-      } else {
-        updateFixedLivePreview();
-      }
-    });
+  // Format currency input
+  const amountEl = document.getElementById('expenseAmount');
+  amountEl.addEventListener('input', () => {
+    amountEl.value = formatNumberInput(amountEl.value);
+    updateEqualSplitPreview();
+    updateCustomSplitStatus();
   });
 
   // Quick amount chips
   document.querySelectorAll('.quick-chips .chip').forEach((chip) => {
     chip.addEventListener('click', () => {
-      const input = document.getElementById('expenseAmount');
-      const cur = parseVND(input.value);
+      const cur = parseVND(amountEl.value);
       let next = cur;
       if (chip.dataset.addAmount) {
         next = cur + Number(chip.dataset.addAmount);
       } else if (chip.dataset.mul1000) {
         next = cur > 0 ? cur * 1000 : 1000;
       }
-      input.value = formatNumberInput(next);
+      amountEl.value = formatNumberInput(next);
       updateEqualSplitPreview();
       updateCustomSplitStatus();
     });
@@ -719,7 +540,6 @@ function bindEvents() {
     });
   });
 
-  // Split participants change delegation
   document.getElementById('splitParticipantsWrap').addEventListener('input', (e) => {
     if (e.target.classList.contains('split-custom-input')) {
       e.target.value = formatNumberInput(e.target.value);
@@ -736,7 +556,7 @@ function bindEvents() {
   document.getElementById('expenseForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const title = document.getElementById('expenseTitle').value.trim();
-    const amount = parseVND(document.getElementById('expenseAmount').value);
+    const amount = parseVND(amountEl.value);
     const date = document.getElementById('expenseDate').value || getDefaultDateForMonth(currentMonth);
     const category = document.getElementById('expenseCategory').value;
     const payerId = document.getElementById('expensePayer').value;
@@ -792,7 +612,7 @@ function bindEvents() {
       showToast('✏️ Đã cập nhật khoản chi.');
     } else {
       monthData.expenses.push(payload);
-      showToast('✅ Đã thêm khoản chi mới.');
+      showToast('✅ Đã lưu & đồng bộ khoản chi!');
     }
 
     saveState();
@@ -819,7 +639,7 @@ function bindEvents() {
       if (!exp) return;
       document.getElementById('expenseId').value = exp.id;
       document.getElementById('expenseTitle').value = exp.title;
-      document.getElementById('expenseAmount').value = formatNumberInput(exp.amount);
+      amountEl.value = formatNumberInput(exp.amount);
       document.getElementById('expenseDate').value = exp.date;
       document.getElementById('expenseCategory').value = exp.category;
       document.getElementById('expensePayer').value = exp.payerId;
@@ -832,6 +652,7 @@ function bindEvents() {
       document.getElementById('expenseFormTitle').textContent = 'Chỉnh sửa khoản chi';
       document.getElementById('btnSubmitExpense').textContent = '💾 Cập nhật khoản chi';
       document.getElementById('btnCancelEditExpense').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       document.getElementById('expenseTitle').focus();
     } else if (delBtn) {
       if (!confirm('Bạn có chắc muốn xóa khoản chi này?')) return;
@@ -842,7 +663,7 @@ function bindEvents() {
     }
   });
 
-  // Settlement actions (Mark as paid / Undo)
+  // Settlement actions
   document.getElementById('settlementList').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-settle-from]');
     if (!btn) return;
@@ -852,7 +673,7 @@ function bindEvents() {
     const fromName = state.members.find((m) => m.id === fromId)?.name || '?';
     const toName = state.members.find((m) => m.id === toId)?.name || '?';
 
-    if (!confirm(`Xác nhận ${fromName} đã chuyển khoản ${formatVND(amount)} cho ${toName}?`)) return;
+    if (!confirm(`Xác nhận ${fromName} đã chuyển ${formatVND(amount)} cho ${toName}?`)) return;
     const monthData = ensureMonth(currentMonth);
     monthData.settlements = monthData.settlements || [];
     monthData.settlements.push({
@@ -864,7 +685,7 @@ function bindEvents() {
     });
     saveState();
     renderAll();
-    showToast('✅ Đã ghi nhận thanh toán!');
+    showToast('✅ Đã chốt thanh toán!');
   });
 
   document.getElementById('settlementHistoryList').addEventListener('click', (e) => {
@@ -877,56 +698,13 @@ function bindEvents() {
     showToast('Đã hoàn tác lượt thanh toán.');
   });
 
-  // Fixed bill form events
-  document.querySelectorAll('#waterModeControl .seg-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      currentWaterMode = btn.dataset.waterMode;
-      updateWaterModeUI();
-      updateFixedLivePreview();
-    });
-  });
-
-  ['elecOld', 'elecNew', 'waterPersonCount', 'waterOld', 'waterNew'].forEach((id) => {
-    document.getElementById(id).addEventListener('input', updateFixedLivePreview);
-  });
-
-  document.getElementById('fixedForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const monthData = ensureMonth(currentMonth);
-    monthData.fixed = readFixedForm();
-    saveState();
-    renderAll();
-    showToast('💾 Đã lưu hóa đơn phòng & điện nước!');
-  });
-
-  document.getElementById('btnCopyPrevFixed').addEventListener('click', () => {
-    const prevKey = shiftMonthKey(currentMonth, -1);
-    const prevFixed = state.months[prevKey]?.fixed;
-    if (!prevFixed) {
-      showToast(`Không tìm thấy hóa đơn của ${formatMonthLabel(prevKey)}.`);
-      return;
-    }
-    const monthData = ensureMonth(currentMonth);
-    monthData.fixed = {
-      ...prevFixed,
-      elecOld: prevFixed.elecNew || prevFixed.elecOld || '',
-      elecNew: '',
-      waterOld: prevFixed.waterNew || prevFixed.waterOld || '',
-      waterNew: '',
-    };
-    saveState();
-    populateFixedForm();
-    renderOverview();
-    showToast(`📋 Đã chép đơn giá & đẩy chỉ số mới của ${formatMonthLabel(prevKey)} sang số cũ!`);
-  });
-
   // Settings: Room name
   document.getElementById('btnSaveRoomName').addEventListener('click', () => {
     const name = document.getElementById('roomNameInput').value.trim();
-    state.roomName = name || 'Phòng trọ của chúng mình';
+    state.roomName = name || 'Chi tiêu chung phòng trọ';
     saveState();
     renderAll();
-    showToast('Đã cập nhật tên phòng trọ.');
+    showToast('Đã cập nhật tên nhóm.');
   });
 
   // Settings: Members edit / remove
@@ -943,25 +721,24 @@ function bindEvents() {
     }
     saveState();
     renderAll();
-    showToast('Đã cập nhật thông tin thành viên.');
+    showToast('Đã cập nhật thành viên.');
   });
 
   document.getElementById('membersList').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-remove-member]');
     if (!btn) return;
     if (state.members.length <= 1) {
-      showToast('Phòng trọ cần ít nhất 1 thành viên.');
+      showToast('Cần ít nhất 1 thành viên.');
       return;
     }
     const target = state.members.find((m) => m.id === btn.dataset.removeMember);
-    if (!confirm(`Xóa thành viên "${target?.name}" khỏi danh sách?`)) return;
+    if (!confirm(`Xóa "${target?.name}" khỏi danh sách?`)) return;
     state.members = state.members.filter((m) => m.id !== btn.dataset.removeMember);
     saveState();
     renderAll();
     showToast('Đã xóa thành viên.');
   });
 
-  // Add member
   document.getElementById('addMemberForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const input = document.getElementById('newMemberName');
@@ -972,7 +749,7 @@ function bindEvents() {
     input.value = '';
     saveState();
     renderAll();
-    showToast(`👋 Đã thêm ${name} vào phòng!`);
+    showToast(`👋 Đã thêm ${name}!`);
   });
 
   // Export / Import JSON
@@ -984,7 +761,7 @@ function bindEvents() {
     a.download = `troshare-backup-${currentMonth}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('📥 Đã tải xuống file sao lưu JSON.');
+    showToast('📥 Đã tải file sao lưu JSON.');
   });
 
   document.getElementById('inputImportJson').addEventListener('change', (e) => {
@@ -995,172 +772,50 @@ function bindEvents() {
       try {
         const parsed = JSON.parse(String(reader.result));
         if (!parsed || !Array.isArray(parsed.members) || parsed.members.length === 0) {
-          throw new Error('Invalid format');
+          throw new Error('Invalid');
         }
         state = parsed;
-        pendingSharedState = null;
         saveState();
         renderAll();
-        showToast('✅ Đã khôi phục dữ liệu từ file JSON!');
+        showToast('✅ Đã khôi phục & đồng bộ từ JSON!');
       } catch {
-        showToast('❌ File JSON không đúng định dạng TrọShare.');
+        showToast('❌ File JSON không hợp lệ.');
       }
     };
     reader.readAsText(file);
     e.target.value = '';
   });
 
-  // Demo & Reset
-  document.getElementById('btnLoadDemo').addEventListener('click', () => {
-    if (!confirm('Nạp dữ liệu mẫu sẽ thay thế dữ liệu hiện tại của tháng này. Tiếp tục?')) return;
-    state = createDemoState(currentMonth);
-    pendingSharedState = null;
-    saveState();
-    renderAll();
-    switchTab('overview');
-    showToast('✨ Đã nạp dữ liệu mẫu! Xem thử tổng quan nhé.');
-  });
-
+  // Reset all
   document.getElementById('btnResetAll').addEventListener('click', () => {
-    if (!confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu và đặt lại từ đầu?')) return;
+    if (!confirm('Xóa toàn bộ dữ liệu chi tiêu của cả 2 máy về 0?')) return;
     state = createDefaultState();
-    pendingSharedState = null;
     saveState();
     resetExpenseForm();
     renderAll();
-    showToast('Đã đặt lại toàn bộ dữ liệu.');
-  });
-
-  // Cloud Sync (Supabase) UI events
-  document.getElementById('btnSyncStatus').addEventListener('click', () => {
-    switchTab('settings');
-    document.getElementById('cloudSyncCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-
-  document.getElementById('btnSaveSupabaseConfig').addEventListener('click', () => {
-    const url = document.getElementById('supabaseUrlInput').value.trim();
-    const anonKey = document.getElementById('supabaseKeyInput').value.trim();
-    if (!url || !anonKey) {
-      showToast('Vui lòng nhập đầy đủ Supabase URL và Anon Key.');
-      return;
-    }
-    saveSyncSettings({ url, anonKey });
-    document.getElementById('supabaseConfigDetails').open = false;
-    showToast('✅ Đã lưu cấu hình Supabase! Giờ hãy nhập Mã phòng và bấm Kết nối.');
-  });
-
-  document.getElementById('btnConnectRoom').addEventListener('click', async () => {
-    const input = document.getElementById('syncRoomCode');
-    const code = normalizeRoomCode(input.value);
-    input.value = code;
-    if (!code || code.length < 3) {
-      showToast('Mã phòng cần ít nhất 3 ký tự (chữ không dấu hoặc số).');
-      return;
-    }
-
-    const res = await connectRoom(code, state);
-    if (!res.ok) {
-      if (res.reason === 'missing_config') {
-        document.getElementById('supabaseConfigDetails').open = true;
-        showToast('⚠️ Hãy điền Supabase URL & Anon Key trước khi kết nối.');
-      } else if (res.reason === 'db_error') {
-        showToast('❌ Lỗi Supabase: Hãy chắc chắn bạn đã chạy file supabase-setup.sql.');
-      } else {
-        showToast('❌ Không thể kết nối Supabase. Kiểm tra lại URL / Key và mạng.');
-      }
-      return;
-    }
-
-    updateSyncConnectedUI(res.roomCode);
-    if (res.loadedRemote) {
-      showToast(`☁️ Đã kết nối phòng "${res.roomCode}" và tải dữ liệu mới nhất!`);
-    } else {
-      showToast(`☁️ Đã tạo & đồng bộ phòng mới "${res.roomCode}" lên Supabase!`);
-    }
-  });
-
-  document.getElementById('btnDisconnectRoom').addEventListener('click', async () => {
-    await disconnectRoom();
-    updateSyncConnectedUI(null);
-    showToast('Đã ngắt đồng bộ đám mây (dữ liệu vẫn lưu trên máy này).');
-  });
-
-  document.getElementById('btnCopyRoomInvite').addEventListener('click', () => {
-    const code = getActiveRoomCode();
-    if (!code) return;
-    const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(code)}`;
-    copyText(url, `🔗 Đã copy link mời vào phòng "${code}"! Gửi cho bạn cùng phòng nhé.`);
+    showToast('🗑️ Đã xóa toàn bộ dữ liệu về 0.');
   });
 }
 
-function updateSyncStatusPill(status, label) {
-  const pill = document.getElementById('btnSyncStatus');
-  const text = document.getElementById('syncStatusText');
-  if (!pill || !text) return;
-  pill.className = `sync-pill ${status}`;
-  text.textContent = label;
-}
-
-function updateSyncConnectedUI(roomCode) {
-  const bar = document.getElementById('syncConnectedActions');
-  const label = document.getElementById('syncConnectedRoomLabel');
-  if (roomCode) {
-    bar?.classList.remove('hidden');
-    if (label) label.textContent = roomCode;
-    document.getElementById('syncRoomCode').value = roomCode;
-  } else {
-    bar?.classList.add('hidden');
-  }
-}
-
-async function initCloudSync() {
-  const settings = loadSyncSettings();
-  document.getElementById('supabaseUrlInput').value = settings.url || '';
-  document.getElementById('supabaseKeyInput').value = settings.anonKey || '';
-  if (settings.isHardcoded) {
-    document.getElementById('supabaseConfigDetails')?.classList.add('hidden');
-  } else if (!settings.url || !settings.anonKey) {
-    document.getElementById('supabaseConfigDetails').open = true;
-  }
-
-  setSyncCallbacks({
-    onStatusChange: (status, label) => updateSyncStatusPill(status, label),
-    onRemoteData: (remoteData, { initial }) => {
-      state = {
-        roomName: remoteData.roomName || 'Phòng trọ của chúng mình',
-        members: remoteData.members,
-        months: remoteData.months || {},
-      };
-      pendingSharedState = null;
-      saveState(true);
-      renderAll();
-      if (!initial) {
-        showToast('☁️ Đã cập nhật dữ liệu mới từ bạn cùng phòng!');
-      }
-    },
-  });
-
-  const params = new URLSearchParams(window.location.search);
-  const urlRoom = normalizeRoomCode(params.get('room') || '');
-  const targetRoom = urlRoom || settings.roomCode;
-
-  if (targetRoom) {
-    document.getElementById('syncRoomCode').value = targetRoom;
-    if (settings.url && settings.anonKey) {
-      const res = await connectRoom(targetRoom, state);
-      if (res.ok) {
-        updateSyncConnectedUI(res.roomCode);
-      }
+// Auto-sync init
+setSyncCallbacks({
+  onStatusChange: (status, label) => updateSyncStatusPill(status, label),
+  onRemoteData: (remoteData, { initial }) => {
+    state = {
+      roomName: remoteData.roomName || 'Chi tiêu chung phòng trọ',
+      members: remoteData.members,
+      months: remoteData.months || {},
+    };
+    saveState(true);
+    renderAll();
+    if (!initial) {
+      showToast('☁️ Đã cập nhật dữ liệu mới!');
     }
-  } else if (settings.isHardcoded) {
-    updateSyncStatusPill('offline', 'Chọn mã phòng');
-  }
-}
+  },
+});
 
-// Init
 initTheme();
-checkSharedUrl();
 bindEvents();
 document.getElementById('expenseDate').value = getDefaultDateForMonth(currentMonth);
 renderAll();
-initCloudSync();
+startAutoSync(state);
