@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrọShare — Chia Tiền Phòng Trọ Thông Minh</title>
+  <meta name="description" content="Ứng dụng tính tiền phòng trọ, điện nước, chi tiêu chung và tự động quyết toán ai nợ ai cho bạn ở ghép." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Shared Link Banner -->
+  <div id="sharedBanner" class="shared-banner hidden">
+    <div class="shared-banner-inner">
+      <span>🔗 Bạn đang xem dữ liệu phòng trọ được chia sẻ qua đường link.</span>
+      <div class="shared-banner-actions">
+        <button id="btnAcceptShare" class="btn btn-primary btn-sm">Lưu vào máy này</button>
+        <button id="btnDismissShare" class="btn btn-ghost btn-sm">Quay lại dữ liệu cũ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">TrọShare</h1>
+          <p class="brand-subtitle" id="roomNameDisplay">Phòng trọ của chúng mình</p>
+        </div>
+      </div>
+
+      <div class="month-picker">
+        <button id="btnPrevMonth" class="icon-btn" title="Tháng trước" aria-label="Tháng trước">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <span id="currentMonthLabel" class="month-label">Tháng 11/2026</span>
+        <button id="btnNextMonth" class="icon-btn" title="Tháng sau" aria-label="Tháng sau">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+
+      <div class="header-actions">
+        <button id="btnCopyZalo" class="btn btn-primary btn-sm" title="Sao chép tổng kết để gửi Zalo/Messenger">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span class="hide-sm">Copy Zalo</span>
+        </button>
+        <button id="btnShareLink" class="btn btn-outline btn-sm" title="Tạo link chia sẻ dữ liệu cho bạn cùng phòng">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+          <span class="hide-sm">Chia sẻ</span>
+        </button>
+        <button id="btnThemeToggle" class="icon-btn" title="Đổi giao diện Sáng / Tối" aria-label="Đổi giao diện">
+          <svg id="iconSun" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg id="iconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="app-nav" aria-label="Điều hướng chính">
+    <div class="container nav-inner">
+      <button class="nav-tab active" data-tab="overview">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        <span>Tổng quan</span>
+      </button>
+      <button class="nav-tab" data-tab="expenses">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        <span>Chi tiêu chung</span>
+      </button>
+      <button class="nav-tab" data-tab="fixed">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        <span>Phòng & Điện nước</span>
+      </button>
+      <button class="nav-tab" data-tab="settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span>Thành viên</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="container main-content">
+    <!-- TAB 1: OVERVIEW -->
+    <section id="tab-overview" class="tab-panel active">
+      <div class="kpi-grid">
+        <div class="card kpi-card kpi-primary">
+          <div class="kpi-label">Tổng chi tiêu tháng</div>
+          <div class="kpi-value mono" id="kpiTotal">0 ₫</div>
+          <div class="kpi-sub" id="kpiTotalSub">Gồm tiền cố định & chi tiêu chung</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">Phòng & Điện nước</div>
+          <div class="kpi-value mono" id="kpiFixed">0 ₫</div>
+          <div class="kpi-sub" id="kpiFixedSub">Chưa nhập hóa đơn tháng này</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">Chi tiêu chung</div>
+          <div class="kpi-value mono" id="kpiShared">0 ₫</div>
+          <div class="kpi-sub" id="kpiSharedSub">0 khoản chi</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">Bình quân / người</div>
+          <div class="kpi-value mono" id="kpiPerPerson">0 ₫</div>
+          <div class="kpi-sub" id="kpiPerPersonSub">2 thành viên</div>
+        </div>
+      </div>
+
+      <div class="grid-2-col">
+        <!-- Settlement Card -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Quyết toán — Ai trả cho ai</h2>
+              <p class="card-desc">Tự động tối ưu số lần chuyển khoản ít nhất</p>
+            </div>
+            <button id="btnQuickAddFromOverview" class="btn btn-primary btn-sm">+ Thêm chi tiêu</button>
+          </div>
+          <div id="settlementList" class="settlement-list"></div>
+          <div id="settlementHistoryWrap" class="settlement-history-wrap hidden">
+            <h3 class="subsection-title">Lịch sử đã thanh toán tháng này</h3>
+            <div id="settlementHistoryList" class="history-list"></div>
+          </div>
+        </div>
+
+        <!-- Member Balances Card -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Chi tiết từng thành viên</h2>
+              <p class="card-desc">Tổng tiền đã ứng trước so với phần phải chịu</p>
+            </div>
+          </div>
+          <div id="memberSummaryList" class="member-summary-list"></div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid-2-col">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Cơ cấu chi tiêu theo danh mục</h2>
+              <p class="card-desc">Tỷ trọng các khoản chi trong tháng</p>
+            </div>
+          </div>
+          <div id="categoryChartContainer" class="chart-box"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">So sánh Đã ứng vs Phần chịu</h2>
+              <p class="card-desc">Trực quan mức đóng góp của từng người</p>
+            </div>
+          </div>
+          <div id="memberBarChartContainer" class="chart-box"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: DAILY SHARED EXPENSES -->
+    <section id="tab-expenses" class="tab-panel">
+      <div class="expenses-layout">
+        <!-- Add / Edit Expense Form -->
+        <div class="card form-card">
+          <div class="card-header">
+            <h2 class="card-title" id="expenseFormTitle">Thêm khoản chi chung</h2>
+            <button id="btnCancelEditExpense" class="btn btn-ghost btn-sm hidden">Hủy sửa</button>
+          </div>
+          <form id="expenseForm" class="stack-md">
+            <input type="hidden" id="expenseId" />
+
+            <div class="form-group">
+              <label for="expenseTitle">Tên khoản chi *</label>
+              <input type="text" id="expenseTitle" placeholder="VD: Đi chợ mua thịt rau, nước giặt..." required />
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="expenseAmount">Số tiền (VNĐ) *</label>
+                <input type="text" inputmode="numeric" id="expenseAmount" placeholder="150.000" required />
+                <div class="quick-chips">
+                  <button type="button" class="chip" data-add-amount="20000">+20k</button>
+                  <button type="button" class="chip" data-add-amount="50000">+50k</button>
+                  <button type="button" class="chip" data-add-amount="100000">+100k</button>
+                  <button type="button" class="chip" data-mul-1000="true">×1.000</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="expenseDate">Ngày chi</label>
+                <input type="date" id="expenseDate" required />
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="expenseCategory">Danh mục</label>
+                <select id="expenseCategory">
+                  <option value="food">🛒 Ăn uống / Đi chợ</option>
+                  <option value="household">🧴 Đồ dùng phòng</option>
+                  <option value="utilities">⚡ Sinh hoạt chung</option>
+                  <option value="fun">🎉 Ăn chơi / Tụ tập</option>
+                  <option value="other">📦 Khác</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="expensePayer">Ai là người trả tiền?</label>
+                <select id="expensePayer" required></select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Cách chia tiền</label>
+              <div class="segmented-control" id="splitTypeControl">
+                <button type="button" class="seg-btn active" data-split="equal">Chia đều</button>
+                <button type="button" class="seg-btn" data-split="custom">Chia tùy chỉnh</button>
+              </div>
+            </div>
+
+            <div id="splitParticipantsWrap" class="split-box">
+              <!-- Populated dynamically -->
+            </div>
+
+            <div class="form-group">
+              <label for="expenseNote">Ghi chú (tùy chọn)</label>
+              <input type="text" id="expenseNote" placeholder="VD: Mua ở Bách Hóa Xanh" />
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full" id="btnSubmitExpense">
+              + Lưu khoản chi
+            </button>
+          </form>
+        </div>
+
+        <!-- Expense List -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Danh sách chi tiêu tháng này</h2>
+              <p class="card-desc" id="expenseListCount">0 khoản chi</p>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <input type="search" id="filterSearch" placeholder="Tìm theo tên khoản chi..." />
+            <select id="filterPayer">
+              <option value="all">Tất cả người trả</option>
+            </select>
+            <select id="filterCategory">
+              <option value="all">Tất cả danh mục</option>
+              <option value="food">🛒 Ăn uống / Đi chợ</option>
+              <option value="household">🧴 Đồ dùng phòng</option>
+              <option value="utilities">⚡ Sinh hoạt chung</option>
+              <option value="fun">🎉 Ăn chơi / Tụ tập</option>
+              <option value="other">📦 Khác</option>
+            </select>
+          </div>
+
+          <div id="expenseList" class="expense-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: FIXED BILLS (RENT, ELECTRICITY, WATER, WIFI) -->
+    <section id="tab-fixed" class="tab-panel">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Hóa đơn cố định hàng tháng</h2>
+            <p class="card-desc">Tính tiền phòng, điện theo số công-tơ, nước, mạng, rác và tự động chia đều</p>
+          </div>
+          <div class="header-btn-group">
+            <button id="btnCopyPrevFixed" class="btn btn-outline btn-sm" title="Lấy đơn giá & chỉ số mới tháng trước làm chỉ số cũ tháng này">
+              📋 Lấy từ tháng trước
+            </button>
+          </div>
+        </div>
+
+        <form id="fixedForm" class="stack-lg">
+          <div class="fixed-top-bar">
+            <label class="toggle-row">
+              <input type="checkbox" id="fixedIncludeInSettlement" checked />
+              <span>Tính gộp hóa đơn này vào bảng quyết toán "Ai nợ ai"</span>
+            </label>
+
+            <div class="form-group inline-select">
+              <label for="fixedPayer">Người đứng ra đóng cho chủ trọ:</label>
+              <select id="fixedPayer"></select>
+            </div>
+          </div>
+
+          <div class="fixed-grid">
+            <!-- Rent -->
+            <div class="fixed-section">
+              <div class="fixed-section-head">
+                <span class="badge-icon">🏠</span>
+                <h3>Tiền phòng trọ</h3>
+              </div>
+              <div class="form-group">
+                <label for="fixedRent">Tiền phòng tháng này (VNĐ)</label>
+                <input type="text" inputmode="numeric" id="fixedRent" placeholder="3.500.000" />
+              </div>
+            </div>
+
+            <!-- Electricity -->
+            <div class="fixed-section">
+              <div class="fixed-section-head">
+                <span class="badge-icon">⚡</span>
+                <h3>Tiền điện (theo công-tơ)</h3>
+                <span class="computed-pill mono" id="elecComputed">0 kWh = 0 ₫</span>
+              </div>
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label for="elecOld">Số cũ</label>
+                  <input type="number" step="any" min="0" id="elecOld" placeholder="1200" />
+                </div>
+                <div class="form-group">
+                  <label for="elecNew">Số mới</label>
+                  <input type="number" step="any" min="0" id="elecNew" placeholder="1325" />
+                </div>
+                <div class="form-group">
+                  <label for="elecRate">Đơn giá (đ/kWh)</label>
+                  <input type="text" inputmode="numeric" id="elecRate" placeholder="3.800" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Water -->
+            <div class="fixed-section">
+              <div class="fixed-section-head">
+                <span class="badge-icon">💧</span>
+                <h3>Tiền nước</h3>
+                <span class="computed-pill mono" id="waterComputed">0 ₫</span>
+              </div>
+              <div class="segmented-control sm" id="waterModeControl">
+                <button type="button" class="seg-btn active" data-water-mode="per_person">Khoán theo người</button>
+                <button type="button" class="seg-btn" data-water-mode="meter">Theo đồng hồ (m³)</button>
+              </div>
+              <div id="waterPerPersonFields" class="form-row-2 mt-sm">
+                <div class="form-group">
+                  <label for="waterPerPersonRate">Đơn giá / người (VNĐ)</label>
+                  <input type="text" inputmode="numeric" id="waterPerPersonRate" placeholder="100.000" />
+                </div>
+                <div class="form-group">
+                  <label for="waterPersonCount">Số người tính nước</label>
+                  <input type="number" min="1" id="waterPersonCount" value="2" />
+                </div>
+              </div>
+              <div id="waterMeterFields" class="form-row-3 mt-sm hidden">
+                <div class="form-group">
+                  <label for="waterOld">Số cũ (m³)</label>
+                  <input type="number" step="any" min="0" id="waterOld" placeholder="50" />
+                </div>
+                <div class="form-group">
+                  <label for="waterNew">Số mới (m³)</label>
+                  <input type="number" step="any" min="0" id="waterNew" placeholder="58" />
+                </div>
+                <div class="form-group">
+                  <label for="waterMeterRate">Đơn giá (đ/m³)</label>
+                  <input type="text" inputmode="numeric" id="waterMeterRate" placeholder="20.000" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Other Fixed Fees -->
+            <div class="fixed-section">
+              <div class="fixed-section-head">
+                <span class="badge-icon">📶</span>
+                <h3>Wi-Fi, Rác, Gửi xe & Dịch vụ khác</h3>
+              </div>
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label for="fixedWifi">Wi-Fi / Mạng</label>
+                  <input type="text" inputmode="numeric" id="fixedWifi" placeholder="100.000" />
+                </div>
+                <div class="form-group">
+                  <label for="fixedTrash">Rác / Vệ sinh</label>
+                  <input type="text" inputmode="numeric" id="fixedTrash" placeholder="30.000" />
+                </div>
+                <div class="form-group">
+                  <label for="fixedParking">Gửi xe / Khác</label>
+                  <input type="text" inputmode="numeric" id="fixedParking" placeholder="100.000" />
+                </div>
+              </div>
+              <div class="form-group mt-sm">
+                <label for="fixedOtherNote">Ghi chú thêm (nếu có)</label>
+                <input type="text" id="fixedOtherNote" placeholder="VD: Gửi 2 xe máy, phí thang máy..." />
+              </div>
+            </div>
+          </div>
+
+          <!-- Summary Bar -->
+          <div class="fixed-summary-bar">
+            <div class="fixed-summary-numbers">
+              <div>
+                <span class="muted">Tổng tiền cố định:</span>
+                <strong class="mono text-lg" id="fixedTotalDisplay">0 ₫</strong>
+              </div>
+              <div>
+                <span class="muted">Mỗi người (<span id="fixedMemberCountDisplay">2</span> người):</span>
+                <strong class="mono text-lg text-primary" id="fixedPerPersonDisplay">0 ₫</strong>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">💾 Lưu hóa đơn tháng này</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- TAB 4: MEMBERS & SETTINGS -->
+    <section id="tab-settings" class="tab-panel">
+      <div class="grid-2-col">
+        <!-- Roommates Management -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Thành viên phòng trọ</h2>
+              <p class="card-desc">Thêm, đổi tên hoặc tùy chỉnh màu đại diện cho từng người</p>
+            </div>
+          </div>
+
+          <div class="form-group mb-md">
+            <label for="roomNameInput">Tên phòng trọ</label>
+            <div class="input-with-btn">
+              <input type="text" id="roomNameInput" placeholder="VD: Phòng 302 - Hẻm 45" />
+              <button id="btnSaveRoomName" class="btn btn-outline">Lưu tên</button>
+            </div>
+          </div>
+
+          <div id="membersList" class="members-list"></div>
+
+          <form id="addMemberForm" class="add-member-form">
+            <input type="text" id="newMemberName" placeholder="Nhập tên bạn cùng phòng mới..." required />
+            <button type="submit" class="btn btn-primary">+ Thêm người</button>
+          </form>
+        </div>
+
+        <!-- Backup, Sync & Demo -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Đồng bộ, Sao lưu & Dữ liệu</h2>
+              <p class="card-desc">Dữ liệu được lưu an toàn ngay trên trình duyệt của bạn</p>
+            </div>
+          </div>
+
+          <div class="stack-md">
+            <div class="action-tile">
+              <div>
+                <h4>🔗 Chia sẻ nhanh qua đường link</h4>
+                <p class="muted">Tạo đường link chứa toàn bộ dữ liệu phòng trọ để gửi qua Zalo cho bạn cùng phòng mở xem & lưu về máy.</p>
+              </div>
+              <button id="btnShareLink2" class="btn btn-primary btn-sm">Tạo link</button>
+            </div>
+
+            <div class="action-tile">
+              <div>
+                <h4>📥 Xuất / Nhập file dự phòng (JSON)</h4>
+                <p class="muted">Tải file sao lưu về máy hoặc khôi phục lại khi đổi điện thoại/trình duyệt.</p>
+              </div>
+              <div class="btn-row">
+                <button id="btnExportJson" class="btn btn-outline btn-sm">Xuất JSON</button>
+                <label class="btn btn-outline btn-sm file-btn">
+                  Nhập JSON
+                  <input type="file" id="inputImportJson" accept=".json" hidden />
+                </label>
+              </div>
+            </div>
+
+            <div class="action-tile">
+              <div>
+                <h4>✨ Dữ liệu mẫu dùng thử</h4>
+                <p class="muted">Điền sẵn hóa đơn điện nước & vài khoản đi chợ mẫu để bạn xem thử cách hoạt động.</p>
+              </div>
+              <button id="btnLoadDemo" class="btn btn-outline btn-sm">Nạp dữ liệu mẫu</button>
+            </div>
+
+            <div class="action-tile danger-tile">
+              <div>
+                <h4>🗑️ Xóa toàn bộ dữ liệu</h4>
+                <p class="muted">Đưa ứng dụng về trạng thái ban đầu (mặc định 2 thành viên).</p>
+              </div>
+              <button id="btnResetAll" class="btn btn-danger btn-sm">Xóa tất cả</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Zalo Summary Modal -->
+  <div id="zaloModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="zaloModalTitle">
+    <div class="modal-backdrop" data-close-modal="zaloModal"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="zaloModalTitle">Tổng kết gửi Zalo / Messenger</h3>
+        <button class="icon-btn" data-close-modal="zaloModal" aria-label="Đóng">✕</button>
+      </div>
+      <textarea id="zaloSummaryText" class="zalo-textarea" rows="15" readonly></textarea>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-close-modal="zaloModal">Đóng</button>
+        <button id="btnConfirmCopyZalo" class="btn btn-primary">📋 Sao chép nội dung</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
