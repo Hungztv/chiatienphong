@@ -168,8 +168,53 @@
     <!-- TAB 2: DAILY SHARED EXPENSES -->
     <section id="tab-expenses" class="tab-panel">
       <div class="expenses-layout">
-        <!-- Add / Edit Expense Form -->
-        <div class="card form-card">
+        <!-- Left column: AI Quick Entry + Manual Form -->
+        <div class="expenses-left-col">
+          <!-- AI Quick Entry & Receipt Scanner -->
+          <div class="card ai-card">
+            <div class="ai-card-header">
+              <div class="ai-badge">✨ Gemini AI</div>
+              <h2 class="card-title">Nhập nhanh bằng câu hoặc hóa đơn</h2>
+              <p class="card-desc">Gõ tự nhiên hoặc chụp bill siêu thị — AI tự tách món, số tiền & người trả</p>
+            </div>
+
+            <div class="stack-sm">
+              <textarea id="aiPromptInput" class="ai-input" rows="2" placeholder='VD: "Bạn A mua thịt rau 120k, đổi bình nước 40k"'></textarea>
+
+              <div id="aiImagePreviewWrap" class="ai-image-preview hidden">
+                <img id="aiImagePreview" alt="Ảnh hóa đơn" />
+                <div class="ai-image-meta">
+                  <span>📄 Đã đính kèm ảnh hóa đơn</span>
+                  <button type="button" id="btnRemoveAiImage" class="btn btn-ghost btn-sm text-negative">Gỡ ảnh</button>
+                </div>
+              </div>
+
+              <div class="ai-actions">
+                <label class="btn btn-outline btn-sm ai-upload-btn">
+                  📷 Chụp / Chọn bill
+                  <input type="file" id="aiReceiptInput" accept="image/*" hidden />
+                </label>
+                <button type="button" id="btnRunAiParse" class="btn btn-ai btn-sm">
+                  <span id="aiBtnLabel">✨ Phân tích AI</span>
+                </button>
+              </div>
+
+              <!-- AI Parsed Preview -->
+              <div id="aiResultsWrap" class="ai-results hidden">
+                <div class="ai-results-head">
+                  <strong>Kết quả AI nhận diện</strong>
+                  <button type="button" id="btnClearAiResults" class="btn btn-ghost btn-sm">Đóng</button>
+                </div>
+                <div id="aiResultsList" class="ai-results-list"></div>
+                <div class="ai-results-footer">
+                  <button type="button" id="btnSaveAllAiItems" class="btn btn-primary btn-full">✅ Lưu tất cả vào chi tiêu</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Add / Edit Expense Form -->
+          <div class="card form-card">
           <div class="card-header">
             <h2 class="card-title" id="expenseFormTitle">Thêm khoản chi mới</h2>
             <button id="btnCancelEditExpense" class="btn btn-ghost btn-sm hidden">Hủy sửa</button>
@@ -234,6 +279,7 @@
               + Lưu khoản chi
             </button>
           </form>
+        </div>
         </div>
 
         <!-- Expense List -->

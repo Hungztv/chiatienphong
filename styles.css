@@ -895,6 +895,152 @@ input:focus, select:focus, textarea:focus {
   transform: scale(0.97);
 }
 
+/* AI Quick Entry Card */
+.expenses-left-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(15, 118, 110, 0.06) 0%, var(--surface) 45%);
+  border: 1.5px solid rgba(15, 118, 110, 0.25);
+}
+
+[data-theme="dark"] .ai-card {
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.12) 0%, var(--surface) 50%);
+  border-color: rgba(20, 184, 166, 0.32);
+}
+
+.ai-card-header {
+  margin-bottom: 12px;
+}
+
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0f766e, #6366f1);
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+
+.ai-input {
+  resize: none;
+  min-height: 64px;
+  line-height: 1.45;
+}
+
+.ai-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ai-upload-btn {
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.btn-ai {
+  background: linear-gradient(135deg, #0f766e 0%, #4f46e5 100%);
+  color: #ffffff;
+  min-height: 40px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.22);
+}
+
+.btn-ai:hover {
+  opacity: 0.94;
+}
+
+.btn-ai:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.ai-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+
+.ai-image-preview img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.ai-image-meta {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.ai-results {
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  border: 1px solid var(--primary);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.86rem;
+}
+
+.ai-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.ai-item-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  justify-content: flex-end;
+}
+
 /* Visual Amount Hero Input */
 .amount-hero-box {
   background: var(--primary-soft);

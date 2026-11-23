@@ -16,6 +16,7 @@ import {
 } from './utils.js';
 import { renderCategoryDonut, renderMemberBarChart } from './charts.js';
 import { schedulePushState, setSyncCallbacks, startAutoSync } from './sync.js';
+import { compressImageToBase64, parseExpenseWithAI } from './ai.js';
 
 const STORAGE_KEY = 'troshare_state_v3';
 const THEME_KEY = 'troshare_theme_v1';
@@ -30,6 +31,8 @@ try {
 let state = loadState();
 let currentMonth = getMonthKey(new Date());
 let currentSplitType = 'equal';
+let pendingAiImage = null; // { base64, mimeType, previewUrl }
+let pendingAiItems = [];
 
 function createDefaultState() {
   return {
@@ -889,6 +892,183 @@ function bindEvents() {
     renderAll();
     showToast('🗑️ Đã xóa toàn bộ dữ liệu về 0.');
   });
+
+  // AI Quick Entry & Receipt Scanner
+  document.getElementById('aiReceiptInput').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      showToast('📷 Đang nén ảnh hóa đơn...');
+      pendingAiImage = await compressImageToBase64(file);
+      document.getElementById('aiImagePreview').src = pendingAiImage.previewUrl;
+      document.getElementById('aiImagePreviewWrap').classList.remove('hidden');
+      showToast('✅ Đã gắn ảnh hóa đơn! Bấm "Phân tích AI" nhé.');
+    } catch (err) {
+      showToast('❌ ' + (err?.message || 'Không đọc được ảnh.'));
+    }
+    e.target.value = '';
+  });
+
+  document.getElementById('btnRemoveAiImage').addEventListener('click', () => {
+    pendingAiImage = null;
+    document.getElementById('aiImagePreviewWrap').classList.add('hidden');
+    document.getElementById('aiImagePreview').src = '';
+  });
+
+  document.getElementById('btnRunAiParse').addEventListener('click', runAiParse);
+
+  document.getElementById('aiPromptInput').addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      runAiParse();
+    }
+  });
+
+  document.getElementById('btnClearAiResults').addEventListener('click', () => {
+    pendingAiItems = [];
+    document.getElementById('aiResultsWrap').classList.add('hidden');
+  });
+
+  document.getElementById('aiResultsList').addEventListener('click', (e) => {
+    const fillBtn = e.target.closest('[data-ai-fill]');
+    const delBtn = e.target.closest('[data-ai-remove]');
+    if (fillBtn) {
+      const idx = Number(fillBtn.dataset.aiFill);
+      const item = pendingAiItems[idx];
+      if (!item) return;
+      document.getElementById('expenseTitle').value = item.title;
+      document.getElementById('expenseAmount').value = formatNumberInput(item.amount);
+      document.getElementById('expenseDate').value = item.date || getDefaultDateForMonth(currentMonth);
+      document.getElementById('expenseCategory').value = item.category;
+      document.getElementById('expensePayer').value = item.payerId;
+      document.getElementById('expenseNote').value = item.note || '';
+      renderMemberSelects();
+      renderCategoryPills();
+      updateEqualSplitPreview();
+      pendingAiItems.splice(idx, 1);
+      renderAiResults();
+      document.getElementById('expenseTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast('✏️ Đã điền vào form bên dưới để bạn chỉnh sửa!');
+    } else if (delBtn) {
+      const idx = Number(delBtn.dataset.aiRemove);
+      pendingAiItems.splice(idx, 1);
+      renderAiResults();
+    }
+  });
+
+  document.getElementById('btnSaveAllAiItems').addEventListener('click', () => {
+    if (pendingAiItems.length === 0) return;
+    const memberIds = state.members.map((m) => m.id);
+    let savedCount = 0;
+
+    for (const item of pendingAiItems) {
+      const targetMonth = /^\d{4}-\d{2}/.test(item.date || '') ? item.date.slice(0, 7) : currentMonth;
+      const monthData = ensureMonth(targetMonth);
+      monthData.expenses.push({
+        id: uid('exp'),
+        title: item.title,
+        amount: item.amount,
+        date: item.date || getDefaultDateForMonth(targetMonth),
+        category: item.category,
+        payerId: item.payerId,
+        splitType: 'equal',
+        participants: [...memberIds],
+        customSplits: null,
+        note: item.note || '',
+      });
+      savedCount++;
+    }
+
+    pendingAiItems = [];
+    pendingAiImage = null;
+    document.getElementById('aiPromptInput').value = '';
+    document.getElementById('aiImagePreviewWrap').classList.add('hidden');
+    document.getElementById('aiImagePreview').src = '';
+    document.getElementById('aiResultsWrap').classList.add('hidden');
+
+    saveState();
+    renderAll();
+    showToast(`✨ Đã lưu & đồng bộ ${savedCount} khoản chi bằng AI!`);
+  });
+}
+
+async function runAiParse() {
+  const text = (document.getElementById('aiPromptInput').value || '').trim();
+  if (!text && !pendingAiImage) {
+    showToast('Hãy gõ câu chi tiêu hoặc chụp ảnh hóa đơn trước nhé.');
+    return;
+  }
+
+  const btn = document.getElementById('btnRunAiParse');
+  const label = document.getElementById('aiBtnLabel');
+  btn.disabled = true;
+  label.textContent = '⏳ AI đang đọc...';
+
+  try {
+    const items = await parseExpenseWithAI({
+      text,
+      imageBase64: pendingAiImage?.base64 || '',
+      mimeType: pendingAiImage?.mimeType || 'image/jpeg',
+      members: state.members,
+      today: new Date().toISOString().slice(0, 10),
+    });
+
+    if (items.length === 0) {
+      showToast('AI chưa tìm thấy khoản tiền nào. Bạn thử ghi rõ số tiền nhé!');
+      return;
+    }
+
+    pendingAiItems = items;
+    renderAiResults();
+    showToast(`✨ AI đã tách được ${items.length} khoản chi!`);
+  } catch (err) {
+    showToast('❌ ' + (err?.message || 'Lỗi khi gọi AI.'));
+  } finally {
+    btn.disabled = false;
+    label.textContent = '✨ Phân tích AI';
+  }
+}
+
+function renderAiResults() {
+  const wrap = document.getElementById('aiResultsWrap');
+  const list = document.getElementById('aiResultsList');
+  if (!wrap || !list) return;
+
+  if (pendingAiItems.length === 0) {
+    wrap.classList.add('hidden');
+    list.innerHTML = '';
+    return;
+  }
+
+  wrap.classList.remove('hidden');
+  list.innerHTML = pendingAiItems
+    .map((item, idx) => {
+      const cat = CATEGORIES[item.category] || CATEGORIES.other;
+      const payer = state.members.find((m) => m.id === item.payerId);
+      return `
+        <div class="ai-item-card">
+          <div class="expense-left">
+            <div class="expense-cat-badge" style="background:${cat.bg}; border-color:transparent;">${cat.icon}</div>
+            <div>
+              <div class="expense-title">${escapeHtml(item.title)}</div>
+              <div class="expense-meta">
+                <span>${formatShortDate(item.date)}</span> ·
+                <span><strong>${escapeHtml(payer?.name || '?')}</strong> trả</span>
+              </div>
+              ${item.note ? `<div class="expense-note">${escapeHtml(item.note)}</div>` : ''}
+            </div>
+          </div>
+          <div style="text-align:right; flex-shrink:0;">
+            <div class="expense-amount mono">${formatVND(item.amount)}</div>
+            <div class="ai-item-actions">
+              <button type="button" class="btn btn-ghost btn-sm" data-ai-fill="${idx}">Sửa</button>
+              <button type="button" class="btn btn-ghost btn-sm text-negative" data-ai-remove="${idx}">✕</button>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
 }
 
 // Auto-sync init
